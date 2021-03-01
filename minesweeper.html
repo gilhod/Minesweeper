@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    
+    .sheet {
+        background-color: bisque;
+    }
+    
+.left-column {
+    float: left;
+    width: 30%;
+}
+
+    
+.right-column {
+    float: left;
+    width: 70%;
+}
+
+    
+/* Clear floats after the columns */
+.row:after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+    
+    
+    .center {
+        margin: auto;
+        width: 60%;
+        //border: 3px solid #73AD21;
+        padding: 10px;
+        text-align: center;
+}
+    
+    .board {
+        margin: auto;
+        width: auto;
+        text-align: center;
+}
+    
+    .inline {
+        display: inline-block;
+    }
+    
+    .gameCell {
+        background-color: #808080; /* Grey */
+        cursor: default;
+        border-style: solid;
+        border-width: 1px;
+        border-color: #505050;
+        color:  #808080; /* Grey */
+        //padding: 15px 32px;
+        width: 25px;
+        height: 25px;
+        //vertical-align: middle;
+        text-align: center;
+        //text-decoration: none;
+       display: inline-block;
+        font-size: 23px;
+        font-weight: bold;
+        font-family: "Times New Roman", Times, serif;
+        box-sizing: border-box;
+        
+}
+    
+    .marked {
+        color: black;
+    }
+    
+    .marked-wrong {
+        color: red; 
+    }
+    
+    .mine {
+        color: firebrick;
+        background-color: firebrick;
+    }
+    
+    .mine-clicked {
+        color: #f44336; /* Red */
+        background-color: #f44336; /* Red */
+    }
+    
+    .exposed {
+        background-color: #e7e7e7; /* Grey */
+        border-color: #909090;
+    }
+
+    .zero {
+        color: #e7e7e7; /* Grey */
+    }
+    
+    .one {
+        color: blue; 
+    }
+    
+    .two {
+        color: green; 
+    }
+    
+    .three {
+        color: red; 
+    }
+    
+    .four {
+        color: darkblue; 
+    }
+    
+    .five {
+        color: darkviolet;
+    }
+    
+    
+    .win-messege {
+        background-color: lawngreen;
+        color: darkblue;
+        
+    }    
+
+    
+</style>
+</head>
+<body class="sheet" oncontextmenu="return false" onload="drawBoard()">
+
+<div class="center">
+ <button type="button" onclick="restartGame()">Restart</button><br>
+</div>
+
+<div class="row">    
+    <div class="left-column">
+        <div class="inline">Mines Left: </div > <div class="inline" id="minesLeft"></div><br><br>
+        
+        <lable id="minutes"></lable>:<lable id="seconds"></lable> <br><br>
+        
+        <form id="sizeForm">
+            <input type="radio" name="size" value="small"> Small<br>
+            <input type="radio" name="size" value="medium" checked> Medium<br>
+            <input type="radio" name="size" value="large"> Large
+        </form>
+        <br>
+        
+        <label>Record: </label><label id="record"></label>
+
+        
+        
+    </div>
+    
+    <div class="right-column">
+        <div id="board" class="board inline"></div>
+    </div>
+</div>
+
+<br>
+<div id="bottom" ></div>
+    
+<script>
+    
+var gameStatus; // 0 - wait, 1 - active, 2 - over
+var rows = 20;
+var columns = 12;
+var board = [];
+var cells;
+var unexposedLeft;
+var mines = 10;
+var minesLeft;
+var offsets = [
+            [-1,0], [-1,1], [0,1], [1,1], [1,0], [1,-1], [0,-1], [-1,-1]
+        ];
+var timerId;
+var minutesLable = document.getElementById("minutes");
+var secondsLable = document.getElementById("seconds");
+    
+var sizeRadios = document.forms['sizeForm'].elements['size'];
+
+setSize("medium")
+
+for (var i=0, len=sizeRadios.length; i<len; i++) {
+    sizeRadios[i].onchange = function() {
+        changeSize(this.value);
+    }
+}
+
+    
+function clearAll() {
+     var element = document.getElementById("board");
+while (element.firstChild) {
+  element.removeChild(element.firstChild);
+}
+}
+    
+function drawBoard() {
+    
+    cells = rows * columns;
+    unexposedLeft = cells - mines;
+    
+    gameStatus = 0; // wait
+    minesLeft = mines;
+    setZeroTime();
+    
+    for (var i=0; i<rows; i++) {
+        board[i] = [];
+    }
+    
+    for (var i=0; i<rows; i++) {
+        for (var j=0; j<columns; j++) {
+            board[i][j] = {isMine: false, number: 0, isExposed: false, isMarked: false};
+        }
+    }
+    
+    var recordStr;
+    var recordCookieName = rows + "-" + columns + "-" + mines;
+    var recordCookieVal = getCookie(recordCookieName);
+	console.log("recordCookieName = " + recordCookieName + " in drawBoard()")
+	console.log("recordCookieVal = " + recordCookieVal + " in drawBoard()")
+    console.log(recordCookieName + "=" + recordCookieVal +      " in drawBoard()")
+    
+    if (recordCookieVal != "") {
+        var record = parseInt(recordCookieVal);
+        recordStr  = pad(parseInt(record/60) + ":" + pad(record % 60));
+        
+    } else {
+        recordStr = "TBD"
+    }
+    
+    document.getElementById("record").innerHTML = recordStr;
+    document.getElementById("minesLeft").innerHTML = minesLeft;
+    document.getElementById("bottom").innerHTML = "";
+    document.getElementById("bottom").setAttribute("class", "center");
+    
+    var i;
+    var j;
+    var cellId;
+    for (i=0; i < rows; i++)
+    {
+        for (j=0; j < columns; j++)
+        {
+            var cell = document.createElement("div");    
+            cell.setAttribute("class", "gameCell");
+            cellId = i*columns +j;
+            cell.setAttribute("id", cellId);
+            cell.setAttribute("onmousedown", "cellClick(event, id)");
+            document.getElementById("board").appendChild(cell);
+            document.getElementById(cellId).innerHTML = "-"
+        }
+        
+        var brElem = document.createElement("br");    
+        document.getElementById("board").appendChild(brElem);
+    }
+}
+
+function IsCellInsideBoard(i, j) {
+    return (i<rows && i>=0 && j<columns && j>=0);
+}
+    
+function setBoardValues(id, isLeftCick) {
+    
+    for (var i=0; i<mines; i++) {
+        do {
+            var i_rand = Math.floor(Math.random() * rows);
+            var j_rand = Math.floor(Math.random() * columns);
+        } while (board[i_rand][j_rand].isMine || (isLeftCick && (i_rand*columns + j_rand == id) ));
+        
+        board[i_rand][j_rand].isMine = true;    
+        
+        for (var k =0; k<8; k++) {
+            var i_next = i_rand+offsets[k][0];
+            var j_next = j_rand+offsets[k][1];
+            
+            if (IsCellInsideBoard(i_next,j_next))
+                board[i_next][j_next].number++;    
+        }
+    }
+    
+}
+ 
+    
+function restartGame() {
+    
+    if (gameStatus == 0)
+        return;
+    
+    stopTime();
+    clearAll();
+    drawBoard(rows, columns);
+}
+
+        
+function setSize(size) {
+    
+    if (size == "small") {
+        rows = 16;
+        columns = 8;
+        mines = 24;    
+    }
+    else if (size == "medium") {
+        rows = 20;
+        columns = 12;
+        mines = 36;
+    }
+    else if (size == "large") {
+        rows = 22;
+        columns = 18;
+        mines = 48;
+    }
+}
+
+function changeSize(size) {
+	clearAll();
+	setSize(size);
+    drawBoard();
+}
+    
+
+function cellClick(event, id) {
+    
+    if (gameStatus == 2) // game over
+        return;
+    else if (gameStatus == 0) {
+        timerId = setInterval(setTime, 1000);
+        gameStatus = 1; // game on
+        setBoardValues(id, event.button == 0);
+    }
+    
+    if (event.button == 0) // left click 
+        leftMouseClick(id);
+    else if (event.button == 2)
+        rightMouseClick(id);
+}
+    
+function rightMouseClick(cellId) {
+    
+    var i_cell = Math.floor(cellId / columns);
+    var j_cell = cellId % columns;
+    
+    if (board[i_cell][j_cell].isExposed)
+        return;
+    
+    if (!board[i_cell][j_cell].isMarked) {
+        board[i_cell][j_cell].isMarked = true;
+        document.getElementById(cellId).setAttribute("class", "gameCell marked");
+        document.getElementById(cellId).innerHTML= "M";
+        
+        minesLeft--;
+    }
+    else {
+        board[i_cell][j_cell].isMarked = false;
+        document.getElementById(cellId).setAttribute("class", "gameCell");
+        document.getElementById(cellId).innerHTML= board[i_cell][j_cell].number;
+        
+        minesLeft++;
+    }
+    
+    document.getElementById("minesLeft").innerHTML = minesLeft;
+}
+
+    
+function leftMouseClick(cellId) {
+    
+    var i_cell = Math.floor(cellId / columns);
+    var j_cell = cellId % columns;
+    
+    if (board[i_cell][j_cell].isMarked)
+        return;
+    
+    if (board[i_cell][j_cell].isMine)
+        gameOver(i_cell, j_cell);
+    else
+        exposeCells(i_cell, j_cell);
+}
+    
+    
+function exposeCells(i_cell, j_cell) {
+    
+    if (!IsCellInsideBoard(i_cell, j_cell) || board[i_cell][j_cell].isExposed || board[i_cell][j_cell].isMarked)
+        return;
+    
+    exposedSingleCell(i_cell, j_cell);
+    
+    if (unexposedLeft == 0)
+        gameWin(); // 1 - win
+    
+    if (board[i_cell][j_cell].number > 0)
+        return;
+    
+    for (var k =0; k<8; k++) {
+        var i_next = i_cell+offsets[k][0];
+        var j_next = j_cell+offsets[k][1];
+        
+        exposeCells(i_next, j_next);
+    }
+}
+    
+    
+function exposedSingleCell(i_cell, j_cell) {
+
+    board[i_cell][j_cell].isExposed = true;
+    --unexposedLeft;
+    
+    var exposedClass = "gameCell exposed";
+    
+    switch (board[i_cell][j_cell].number)
+    {
+        case 0:
+            exposedClass += " zero";
+            break;
+        case 1:
+            exposedClass += " one";
+            break;
+        case 2:
+            exposedClass += " two";
+            break;
+        case 3:
+            exposedClass += " three";
+            break;
+        case 4:
+            exposedClass += " four";
+            break;
+        case 5:
+            exposedClass += " five";
+            break;
+        case 6:
+            exposedClass += " six";
+            break;
+        case 7:
+            exposedClass += " seven";
+            break;
+        case 8:
+            exposedClass += " eight";
+            break;
+            
+    }
+    
+    var cellId = i_cell*columns +j_cell;
+    document.getElementById(cellId).setAttribute("class", exposedClass);
+    document.getElementById(cellId).innerHTML = board[i_cell][j_cell].number;
+}
+    
+// end of game functions
+
+function gameOver(i_cell, j_cell) {
+    
+    gameStatus = 2;
+    stopTime();
+    
+    for (var i=0; i < rows; i++) {
+        for (var j=0; j < columns; j++) {
+            var cellId = i*columns +j;
+            if (board[i][j].isMarked && !board[i][j].isMine) 
+                document.getElementById(cellId).setAttribute("class", "gameCell marked-wrong");
+            else if (!board[i][j].isMarked && board[i][j].isMine) {
+                document.getElementById(cellId).setAttribute("class", "gameCell mine");
+                document.getElementById(cellId).innerHTML = "x";
+            }
+            else if (!board[i][j].isMarked && !board[i][j].isMine)
+                exposedSingleCell(i, j);
+                
+        }
+    }
+    
+    var clickCellId = i_cell*columns +j_cell;
+    document.getElementById(clickCellId).setAttribute("class", "gameCell mine-clicked");    
+    
+    document.getElementById("bottom").innerHTML = "Game Over";
+}
+    
+function gameWin() {
+    // stop the time count
+    stopTime();
+    // change status - game over
+    gameStatus = 2;
+    
+    // check if new record - if yes record it and show messege "New Record"
+    
+    
+    // mark all remain unmarked mines
+    for (var i=0; i < rows; i++) {
+        for (var j=0; j < columns; j++) {
+            if (board[i][j].isMine) {
+                board[i][j].isMarked = true;
+                var cellId = i*columns+j;
+                document.getElementById(cellId).setAttribute("class", "gameCell marked");
+                document.getElementById(cellId).innerHTML= "M";
+            }
+        }
+    }
+    
+    var recordStr;
+    var recordCookieName = rows + "-" + columns + "-" + mines;
+    var recordCookieVal = getCookie(recordCookieName);
+    console.log(recordCookieName + "=" + recordCookieVal);
+    var winningMsg = "You Win!";
+    var record;
+    
+    // if exist previous record
+    if (recordCookieVal == "")
+        record = 999999;
+    else
+        record = parseInt(recordCookieVal);
+    
+    // if new record
+    if (totalSeconds < record) {
+        
+        console.log(totalSeconds + "<" + record);
+        
+        recordStr  = pad(parseInt(totalSeconds/60) + ":" + pad(totalSeconds % 60));
+        console.log(recordStr);
+        document.getElementById("record").innerHTML = recordStr;
+        winningMsg = "New Record: " + recordStr
+        setCookie(recordCookieName, totalSeconds, 10);
+    }
+    
+    document.getElementById("bottom").innerHTML = winningMsg;
+    document.getElementById("bottom").setAttribute("class", "center win-messege");
+    
+    document.getElementById("minesLeft").innerHTML = 0;
+}
+    
+// timer functions
+    
+function setTime() {
+        ++totalSeconds;
+        secondsLable.innerHTML = pad(totalSeconds % 60);
+        minutesLable.innerHTML = pad(parseInt(totalSeconds/60));
+    }
+
+function pad(val) {
+    var valStr = val + "";
+    if (valStr.length < 2)
+        return "0" + valStr;
+    else
+        return valStr;
+}
+
+function setZeroTime() {
+    totalSeconds = 0;
+    secondsLable.innerHTML = "00";
+    minutesLable.innerHTML = "00";
+}
+
+function stopTime() {
+    clearInterval(timerId);
+}
+
+// cookies functions
+
+function setCookie(cname,cvalue,exdays) {
+    var d = new Date();
+    d.setTime(d.getTime() + (exdays*24*60*60*1000));
+    var expires = "expires=" + d.toGMTString();
+    document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
+}
+
+function getCookie(cname) {
+    var name = cname + "=";
+    var decodedCookie = decodeURIComponent(document.cookie);
+	
+	var ca = decodedCookie.split(';');
+    for(var i = 0; i < ca.length; i++) {
+        var c = ca[i];
+        while (c.charAt(0) == ' ') {
+            c = c.substring(1);
+        } 
+        if (c.indexOf(name) == 0) {
+            return c.substring(name.length, c.length);
+        }
+    }
+    return "";
+}
+
+
+</script>
+
+
+    
+</body>
+</html>
